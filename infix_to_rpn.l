@@ -9,20 +9,27 @@
     int row = 1, current_column = 1, previous_column = 0;
 
     enum {
-        tk_int=256, tk_float, tk_id
+        tk_int=256, tk_float, tk_id, tk_string
     };
 
     map<int, string> token_names = {
         {tk_int, "número inteiro"},
         {tk_float, "número real"},
-        {tk_id, "identificador"}
+        {tk_id, "identificador"},
+        {tk_string, "string"}
     };
 
+    /* Operations with numbers */
     void Expr();
     void SumExpr();
     void PrecExpr(); // used to implement product precedence over additon
     void MulExpr();
     void Unary();
+
+    /* Operations with strings */
+    void StrExpr();
+    void SumStrExpr();
+    void StrUnary();
 
     void consume(int);
 
@@ -33,7 +40,6 @@
     string token_name( int );
 %}
 
-WS          [\n\t" "]
 DIGIT       [0-9]
 SIGN        [+\-]
 ALPHABETIC  [A-Za-z_]
@@ -44,6 +50,8 @@ ID          {ALPHABETIC}({ALPHABETIC}|{DIGIT})*
 DECIMAL     \.{DIGIT}+
 EXPONENT    [eE]{INT}
 FLOAT       {INT}({DECIMAL}{EXPONENT}?|{EXPONENT})
+
+STRING      \"(\\\"|\"\"|[^\"])*\"
 
 %%
 
@@ -56,6 +64,8 @@ FLOAT       {INT}({DECIMAL}{EXPONENT}?|{EXPONENT})
 {INT}       { return tk_int; }
 
 {FLOAT}     { return tk_float; }
+
+{STRING}    { return tk_string; }
 
 {ID}        { return tk_id; }
 
@@ -137,6 +147,43 @@ void Unary() {
             consume(')');
             break;
         }
+        default : {
+            error("Encontrado token inesperado: " + token_name(token));
+        }
+    }
+}
+
+void StrExpr() {
+    StrUnary();
+    SumStrExpr();
+}
+
+void SumStrExpr() {
+    if ( token == '+' ) {
+        consume('+');
+        StrExpr();
+        printf("+ ");
+        SumStrExpr();
+    }
+}
+
+void StrUnary() {
+    switch ( token ) {
+        case tk_id : {
+            string temp(yytext);
+            consume(tk_id);
+            printf("%s ", temp.c_str());
+            break;
+        }
+        case tk_string : {
+            string temp(yytext);
+            consume(tk_string);
+            printf("%s ", temp.c_str());
+            break;
+        }
+        default : {
+            error("Encontrado token inesperado: " + token_name(token));
+        }
     }
 }
 
@@ -170,7 +217,7 @@ void error( string msg ) {
 
 int main () {
     token = yylex();
-    Expr();
+    StrExpr();
     printf("\n");
 
     if ( token == 0 ) {
