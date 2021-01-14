@@ -138,7 +138,7 @@ void Unary() {
         case tk_id : {
             string temp(yytext);
             consume(tk_id);
-            printf("%s ", temp.c_str());
+            printf("%s @ ", temp.c_str());
             break;
         }
         case '(' : {
@@ -172,7 +172,7 @@ void StrUnary() {
         case tk_id : {
             string temp(yytext);
             consume(tk_id);
-            printf("%s ", temp.c_str());
+            printf("%s @ ", temp.c_str());
             break;
         }
         case tk_string : {
