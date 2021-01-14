@@ -20,6 +20,8 @@
 
     void Expr();
     void SumExpr();
+    void PrecExpr(); // used to implement product precedence over additon
+    void MulExpr();
     void Unary();
 
     void consume(int);
@@ -62,7 +64,7 @@ FLOAT       {INT}({DECIMAL}{EXPONENT}?|{EXPONENT})
 %%
 
 void Expr() {
-    Unary();
+    PrecExpr();
     SumExpr();
 }
 
@@ -70,16 +72,40 @@ void SumExpr() {
     switch ( token ){
         case '+' : {
             consume('+');
-            Unary();
+            PrecExpr();
             printf("+ ");
             SumExpr();
             break;
         }
         case '-' : {
             consume('-');
-            Unary();
+            PrecExpr();
             printf("- ");
             SumExpr();
+            break;
+        }
+    }
+}
+
+void PrecExpr() {
+    Unary();
+    MulExpr();
+}
+
+void MulExpr() {
+    switch ( token ){
+        case '*' : {
+            consume('*');
+            Unary();
+            printf("* ");
+            MulExpr();
+            break;
+        }
+        case '/' : {
+            consume('/');
+            Unary();
+            printf("/ ");
+            MulExpr();
             break;
         }
     }
