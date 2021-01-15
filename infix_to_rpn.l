@@ -9,15 +9,24 @@
     int row = 1, current_column = 1, previous_column = 0;
 
     enum {
-        tk_int=256, tk_float, tk_id, tk_string
+        tk_num=256, tk_id, tk_string, tk_print
     };
 
     map<int, string> token_names = {
-        {tk_int, "número inteiro"},
-        {tk_float, "número real"},
-        {tk_id, "identificador"},
-        {tk_string, "string"}
+        {tk_num,    "número"},
+        {tk_id,     "identificador"},
+        {tk_string, "string"},
+        {tk_print,  "print"}
     };
+    
+    /* Grammar rules */
+    void InitialNonTerminal();
+
+    void Print();
+
+    /* Attribution */
+    void Attr();
+    void Expr(); // General expression for either Numbers or Text
 
     /* Operations with numbers */
     void Expr();
@@ -26,30 +35,31 @@
     void MulExpr();
     void Unary();
 
-    /* Operations with strings */
-    void StrExpr();
-    void SumStrExpr();
-    void StrUnary();
+    /* Function calls */
+    void Name();
+    void Call();
+    void Params();
+    void ParamList();
 
+    /* Not grammar rules */
     void consume(int);
-
-    void print(string);
     
     void error(string);
 
-    string token_name( int );
+    string token_name(int);
 %}
 
 DIGIT       [0-9]
 SIGN        [+\-]
 ALPHABETIC  [A-Za-z_]
 
-INT         {SIGN}?{DIGIT}+
+INT         {DIGIT}+
 ID          {ALPHABETIC}({ALPHABETIC}|{DIGIT})*
 
-DECIMAL     \.{DIGIT}+
-EXPONENT    [eE]{INT}
-FLOAT       {INT}({DECIMAL}{EXPONENT}?|{EXPONENT})
+DECIMAL     \.{INT}
+EXPONENT    [eE]{SIGN}?{INT}
+
+NUMBER      {INT}{DECIMAL}?{EXPONENT}?
 
 STRING      \"(\\\"|\"\"|[^\"])*\"
 
@@ -59,11 +69,9 @@ STRING      \"(\\\"|\"\"|[^\"])*\"
 "\t"        { previous_column = current_column; current_column += 2; }
 "\n"        { row++; previous_column = current_column; current_column = 1; }
 
-"+"         { return '+'; }
+"print"     { return tk_print; }
 
-{INT}       { return tk_int; }
-
-{FLOAT}     { return tk_float; }
+{NUMBER}    { return tk_num; }
 
 {STRING}    { return tk_string; }
 
@@ -72,6 +80,41 @@ STRING      \"(\\\"|\"\"|[^\"])*\"
 .           { return yytext[0]; }
 
 %%
+
+void InitialNonTerminal() {
+    switch ( token ) {
+        case tk_print : {
+            Print(); InitialNonTerminal();
+            break;
+        }
+        case tk_id : {
+            Attr(); InitialNonTerminal();
+            break;
+        }
+    }
+}
+
+void Print() {
+    consume(tk_print);
+    
+    Expr();
+    printf("print # ");
+    
+    consume(';');
+}
+
+void Attr() {
+    string temp(yytext);
+
+    consume(tk_id);
+    consume('=');
+    printf("%s ", temp.c_str());
+    
+    Expr();
+    printf("= ");
+
+    consume(';');
+}
 
 void Expr() {
     PrecExpr();
@@ -123,56 +166,24 @@ void MulExpr() {
 
 void Unary() {
     switch ( token ) {
-        case tk_int : {
-            string temp(yytext);
-            consume(tk_int);
-            printf("%s ", temp.c_str());
-            break;
+        case '+' : 
+        case '-' : {
+            string sign(yytext);
+            consume(token);
+            printf("%s", sign.c_str());
         }
-        case tk_float : {
+        case tk_num : {
             string temp(yytext);
-            consume(tk_float);
+            consume(tk_num);
             printf("%s ", temp.c_str());
             break;
         }
         case tk_id : {
             string temp(yytext);
             consume(tk_id);
-            printf("%s @ ", temp.c_str());
-            break;
-        }
-        case '(' : {
-            consume('(');
-            Expr();
-            consume(')');
-            break;
-        }
-        default : {
-            error("Encontrado token inesperado: " + token_name(token));
-        }
-    }
-}
-
-void StrExpr() {
-    StrUnary();
-    SumStrExpr();
-}
-
-void SumStrExpr() {
-    if ( token == '+' ) {
-        consume('+');
-        StrExpr();
-        printf("+ ");
-        SumStrExpr();
-    }
-}
-
-void StrUnary() {
-    switch ( token ) {
-        case tk_id : {
-            string temp(yytext);
-            consume(tk_id);
-            printf("%s @ ", temp.c_str());
+            bool callable = token == '(';
+            Call();
+            printf("%s %c ", temp.c_str(), callable ? '#' : '@');
             break;
         }
         case tk_string : {
@@ -181,21 +192,49 @@ void StrUnary() {
             printf("%s ", temp.c_str());
             break;
         }
-        default : {
-            error("Encontrado token inesperado: " + token_name(token));
+        case '(' : {
+            consume('(');
+            Expr();
+            consume(')');
+            break;
         }
     }
 }
 
+void Call() {
+    if ( token == '(' ) {
+        consume('(');
+        Params();
+    }
+}
+
+void Params() {
+    if ( token == ')' ) {
+        consume(')');
+    }
+    else {
+        Expr();
+        ParamList();
+    }
+}
+
+void ParamList() {
+    if ( token == ',' ) {
+        consume(',');
+        Expr();
+    }
+    Params();
+}
+
 string token_name( int token ) {
-  if( token_names.find( token ) != token_names.end() )
-    return token_names[token];
-  else {
-    string r;
-    r = (char) token;
-    
-    return "'" + r + "'";
-  }
+    if( token_names.find( token ) != token_names.end() )
+        return token_names[token];
+    else {
+        string r;
+        r = (char) token;
+
+        return "'" + r + "'";
+    }
 }
 
 void consume (int expected_token) {
@@ -209,19 +248,19 @@ void consume (int expected_token) {
 }
 
 void error( string msg ) {
-  cout << "*** Erro: ***" << endl
-       << "row: " << row << ", coluna: " << previous_column << endl
-       << msg << endl;
-  exit( 1 );
+    cout << "*** Erro: ***" << endl
+        << "linha: " << row << ", coluna: " << previous_column << endl
+        << msg << endl;
+    exit( 1 );
 }
 
 int main () {
     token = yylex();
-    StrExpr();
+    InitialNonTerminal();
     printf("\n");
 
     if ( token == 0 ) {
-        cout << "Sintaxe ok!" << endl;
+        // cout << "Sintaxe ok" << endl;
     }
     else {
         cout << "Caracteres encontrados após o fim do programa!" << endl;
