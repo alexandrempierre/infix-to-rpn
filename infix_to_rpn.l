@@ -9,120 +9,71 @@
     int row = 1, current_column = 1, previous_column = 0;
 
     enum {
-        tk_num=256, tk_id, tk_string, tk_print
+        tk_id = 256, tk_num
     };
 
     map<int, string> token_names = {
-        {tk_num,    "número"},
-        {tk_id,     "identificador"},
-        {tk_string, "string"},
-        {tk_print,  "print"}
+        { tk_id,  "function name" },
+        { tk_num, "number" }
     };
-    
+
     /* Grammar rules */
-    void InitialNonTerminal();
 
-    void Print();
-
-    /* Attribution */
-    void Attr();
-    void Expr(); // General expression for either Numbers or Text
-
-    /* Operations with numbers */
+    // Expressions
     void Expr();
     void SumExpr();
-    void PrecExpr(); // used to implement product precedence over additon
+    void PrecExpr();
     void MulExpr();
+    void SignUnary();
     void Unary();
 
-    /* Function calls */
-    void Name();
+    // Functions
     void Call();
     void Params();
-    void ParamList();
+    void ParamsList();
 
     /* Not grammar rules */
     void consume(int);
-    
+
     void error(string);
 
     string token_name(int);
 %}
 
-DIGIT       [0-9]
-SIGN        [+\-]
-ALPHABETIC  [A-Za-z_]
+DIGIT           [0-9]
+SIGN            [+\-]
+ALPHABETIC      [A-Za-z_]
 
-INT         {DIGIT}+
-ID          {ALPHABETIC}({ALPHABETIC}|{DIGIT})*
+WHOLE           {DIGIT}+
+IDENTIFIER      {ALPHABETIC}({ALPHABETIC}|{DIGIT})*
 
-DECIMAL     \.{INT}
-EXPONENT    [eE]{SIGN}?{INT}
+DECIMAL         \.{WHOLE}
+EXPONENT        [eE]{SIGN}?{WHOLE}
 
-NUMBER      {INT}{DECIMAL}?{EXPONENT}?
-
-STRING      \"(\\\"|\"\"|[^\"])*\"
+NUMBER          {WHOLE}{DECIMAL}?{EXPONENT}?
 
 %%
 
-" "         { previous_column = current_column++; }
-"\t"        { previous_column = current_column; current_column += 2; }
-"\n"        { row++; previous_column = current_column; current_column = 1; }
+" "             { previous_column = current_column++; }
+"\t"            {  }
+"\n"            {  }
 
-"print"     { return tk_print; }
+{NUMBER}        { return tk_num; }
 
-{NUMBER}    { return tk_num; }
+{IDENTIFIER}    { return tk_id; }
 
-{STRING}    { return tk_string; }
-
-{ID}        { return tk_id; }
-
-.           { return yytext[0]; }
+.               { return yytext[0]; }
 
 %%
 
-void InitialNonTerminal() {
-    switch ( token ) {
-        case tk_print : {
-            Print(); InitialNonTerminal();
-            break;
-        }
-        case tk_id : {
-            Attr(); InitialNonTerminal();
-            break;
-        }
-    }
-}
-
-void Print() {
-    consume(tk_print);
-    
-    Expr();
-    printf("print # ");
-    
-    consume(';');
-}
-
-void Attr() {
-    string temp(yytext);
-
-    consume(tk_id);
-    consume('=');
-    printf("%s ", temp.c_str());
-    
-    Expr();
-    printf("= ");
-
-    consume(';');
-}
-
+/* Grammar rules */
 void Expr() {
     PrecExpr();
     SumExpr();
 }
 
 void SumExpr() {
-    switch ( token ){
+    switch ( token ) {
         case '+' : {
             consume('+');
             PrecExpr();
@@ -146,7 +97,7 @@ void PrecExpr() {
 }
 
 void MulExpr() {
-    switch ( token ){
+    switch ( token ) {
         case '*' : {
             consume('*');
             Unary();
@@ -164,14 +115,28 @@ void MulExpr() {
     }
 }
 
-void Unary() {
+void SignUnary() {
     switch ( token ) {
-        case '+' : 
-        case '-' : {
-            string sign(yytext);
-            consume(token);
-            printf("%s", sign.c_str());
+        case '+' : {
+            consume('+');
+            printf("+");
+            Unary();
+            break;
         }
+        case '-' : {
+            consume('-');
+            printf("-");
+            Unary();
+            break;
+        }
+        default : {
+            Unary();
+        }
+    }
+}
+
+void Unary() {
+    switch (token) {
         case tk_num : {
             string temp(yytext);
             consume(tk_num);
@@ -181,14 +146,7 @@ void Unary() {
         case tk_id : {
             string temp(yytext);
             consume(tk_id);
-            bool callable = token == '(';
             Call();
-            printf("%s %c ", temp.c_str(), callable ? '#' : '@');
-            break;
-        }
-        case tk_string : {
-            string temp(yytext);
-            consume(tk_string);
             printf("%s ", temp.c_str());
             break;
         }
@@ -198,14 +156,16 @@ void Unary() {
             consume(')');
             break;
         }
+        default : {
+            error("Expected number, function call or valid expression"
+                ", found " + token_name(token));
+        }
     }
 }
 
 void Call() {
-    if ( token == '(' ) {
-        consume('(');
-        Params();
-    }
+    consume('(');
+    Params();
 }
 
 void Params() {
@@ -214,19 +174,38 @@ void Params() {
     }
     else {
         Expr();
-        ParamList();
+        ParamsList();
     }
 }
 
-void ParamList() {
+void ParamsList() {
     if ( token == ',' ) {
         consume(',');
+        printf(" ");
         Expr();
     }
     Params();
 }
 
-string token_name( int token ) {
+/* Not grammar rules */
+void consume (int expected_token) {
+    if ( token == expected_token ) {
+        token = yylex();
+    }
+    else {
+        error("Expected " + token_name(expected_token) + 
+                ", found " + token_name(token));
+    }
+}
+
+void error (string msg) {
+    cout << "*** Error: ***" << endl
+        << "row: " << row << ", column: " << previous_column << endl
+        << msg << endl;
+    exit( 1 );
+}
+
+string token_name (int token) {
     if( token_names.find( token ) != token_names.end() )
         return token_names[token];
     else {
@@ -237,33 +216,16 @@ string token_name( int token ) {
     }
 }
 
-void consume (int expected_token) {
-    if ( token == expected_token ) {
-        token = yylex();
-    }
-    else {
-        error("Esperado " + token_name(expected_token) + 
-                ", encontrado " + token_name(token));
-    }
-}
-
-void error( string msg ) {
-    cout << "*** Erro: ***" << endl
-        << "linha: " << row << ", coluna: " << previous_column << endl
-        << msg << endl;
-    exit( 1 );
-}
-
 int main () {
     token = yylex();
-    InitialNonTerminal();
+    Expr();
     printf("\n");
 
     if ( token == 0 ) {
-        // cout << "Sintaxe ok" << endl;
+        cout << "Syntax ok" << endl;
     }
     else {
-        cout << "Caracteres encontrados após o fim do programa!" << endl;
+        cout << "Found characters after the end of the file!" << endl;
     }
 
     return 0;
